@@ -1,0 +1,12 @@
+{
+  "KPlugin": {
+    "Authors": [
+      {
+        "Name": "Inaya Yousfi"
+      }
+    ],
+    "Id": "glassy-blacknpink",
+    "License": "LGPL-2.1-or-later",
+    "Name": "Glassy Black & Pink"
+  }
+}

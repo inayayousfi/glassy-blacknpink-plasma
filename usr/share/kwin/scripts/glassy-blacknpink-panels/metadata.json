@@ -1,0 +1,14 @@
+{
+  "KPlugin": {
+    "Name": "Glassy Black & Pink Panels",
+    "Description": "Keeps Plasma interactions available over fullscreen windows and manages the Glassy Black & Pink panels",
+    "Icon": "preferences-desktop",
+    "Id": "glassy-blacknpink-panels",
+    "Version": "1.0",
+    "License": "MIT",
+    "EnabledByDefault": false
+  },
+  "X-Plasma-API": "javascript",
+  "X-Plasma-MainScript": "code/main.js",
+  "KPackageStructure": "KWin/Script"
+}

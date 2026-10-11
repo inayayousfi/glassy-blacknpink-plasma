@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Glassy Black & Pink Layout
+Comment=Reconcile the Glassy Black & Pink panels for every display
+Exec=/usr/bin/glassy-blacknpink-layout
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+X-KDE-StartupNotify=false

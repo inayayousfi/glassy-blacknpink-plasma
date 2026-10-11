@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-26.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install test dependencies
+        run: |
+          retry() {
+            for attempt in 1 2 3; do
+              "$@" && return
+              (( attempt < 3 )) || return 1
+              sleep $((attempt * 10))
+            done
+          }
+
+          retry sudo apt-get update
+          retry sudo apt-get install -y desktop-file-utils libkf6config-bin
+          retry cargo install resvg --version 0.48.1 --locked
+
+      - name: Test theme
+        run: ./test/run.sh

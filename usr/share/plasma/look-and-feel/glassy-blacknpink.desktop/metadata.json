@@ -1,0 +1,19 @@
+{
+  "KPackageStructure": "Plasma/LookAndFeel",
+  "KPlugin": {
+    "Authors": [
+      {
+        "Name": "Inaya Yousfi"
+      }
+    ],
+    "Category": "",
+    "Description": "Black and pink glass desktop: style, window decoration, colors, Plasma style, icons, cursors, splash and wallpaper",
+    "EnabledByDefault": true,
+    "Id": "glassy-blacknpink.desktop",
+    "License": "LGPL-2.1-or-later",
+    "Name": "Glassy Black & Pink",
+    "Version": "2.0",
+    "Website": "https://github.com/inayayousfi/glassy-blacknpink"
+  },
+  "X-Plasma-APIVersion": "2"
+}

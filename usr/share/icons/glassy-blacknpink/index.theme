@@ -1,0 +1,14 @@
+[Icon Theme]
+Name=Glassy Black & Pink
+Comment=Glassy Black & Pink crosshair cursors over Breeze Dark icons
+Inherits=breeze-dark,breeze_cursors
+# KDE ignores an icon theme without an existing directory, so this one lists
+# an empty folder; every icon comes from Breeze Dark through Inherits.
+Directories=scalable/apps
+
+[scalable/apps]
+Size=48
+MinSize=8
+MaxSize=512
+Type=Scalable
+Context=Applications

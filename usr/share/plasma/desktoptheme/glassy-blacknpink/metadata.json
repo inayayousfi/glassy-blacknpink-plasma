@@ -1,0 +1,18 @@
+{
+  "KPlugin": {
+    "Authors": [
+      {
+        "Name": "Inaya Yousfi"
+      }
+    ],
+    "Category": "",
+    "Description": "Glassy Black & Pink panels, popups and floating-panel spacing",
+    "EnabledByDefault": true,
+    "Id": "glassy-blacknpink",
+    "License": "LGPL-2.1-or-later",
+    "Name": "Glassy Black & Pink",
+    "Version": "1.0",
+    "Website": ""
+  },
+  "X-Plasma-API": "5.0"
+}

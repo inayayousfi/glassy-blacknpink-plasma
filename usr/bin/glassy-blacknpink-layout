@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+relative_layout="plasma/look-and-feel/glassy-blacknpink.desktop/contents/layouts/org.kde.plasma.desktop-layout.js"
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/glassy-blacknpink"
+state_file="$state_dir/layout-version"
+applets="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
+
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+
+for command in qdbus6 kreadconfig6; do
+    command -v "$command" >/dev/null 2>&1 || {
+        printf '%s is required to configure KDE Plasma\n' "$command" >&2
+        exit 1
+    }
+done
+
+# Another global theme owns the panels; leave them as that theme arranged them.
+[ "$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage)" = glassy-blacknpink.desktop ] || exit 0
+
+# Look the layout up the way Plasma finds theme files: the user's data folder
+# first, then the system data folders.
+layout=""
+IFS=: read -ra data_dirs <<<"${XDG_DATA_HOME:-$HOME/.local/share}:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+for data_dir in "${data_dirs[@]}"; do
+    if [ -f "$data_dir/$relative_layout" ]; then
+        layout="$data_dir/$relative_layout"
+        break
+    fi
+done
+[ -n "$layout" ] || {
+    printf 'Glassy Black & Pink layout script not found: %s\n' "$relative_layout" >&2
+    exit 1
+}
+
+if ! qdbus6 org.kde.plasmashell /PlasmaShell >/dev/null 2>&1; then
+    exit 75
+fi
+
+current_version=""
+[ ! -f "$state_file" ] || current_version="$(<"$state_file")"
+first_run=false
+if [ -z "$current_version" ]; then
+    first_run=true
+    if [ -f "$applets" ]; then
+        backup="$applets.backup.$(date +%Y%m%d_%H%M%S)"
+        suffix=1
+        while [ -e "$backup" ]; do
+            backup="$applets.backup.$(date +%Y%m%d_%H%M%S).$suffix"
+            suffix=$((suffix + 1))
+        done
+        cp -a "$applets" "$backup"
+    fi
+fi
+
+script="const glassyBlacknpinkFirstRun = $first_run;
+$(<"$layout")"
+output="$(qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$script")"
+
+case "$output" in
+    *GLASSY_BLACKNPINK_STATUS=ok:version=*)
+        layout_version="${output##*GLASSY_BLACKNPINK_STATUS=ok:version=}"
+        layout_version="${layout_version%%:*}"
+        ;;
+    *GLASSY_BLACKNPINK_STATUS=missing:*)
+        printf 'KDE Plasma layout requires installed widgets: %s\n' "${output##*GLASSY_BLACKNPINK_STATUS=missing:}" >&2
+        exit 1
+        ;;
+    *GLASSY_BLACKNPINK_STATUS=error:*)
+        printf 'KDE Plasma layout failed: %s\n' "${output##*GLASSY_BLACKNPINK_STATUS=error:}" >&2
+        exit 1
+        ;;
+    *)
+        printf 'KDE Plasma did not confirm the layout update: %s\n' "$output" >&2
+        exit 1
+        ;;
+esac
+
+mkdir -p "$state_dir"
+printf '%s\n' "$layout_version" >"$state_file"

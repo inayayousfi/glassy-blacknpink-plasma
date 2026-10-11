@@ -1,0 +1,34 @@
+[kdeglobals][General]
+ColorScheme=GlassyBlacknpink
+font=Iosevka Nerd Font,12,-1,5,50,0,0,0,0,0
+fixed=Iosevka Nerd Font,12,-1,5,50,0,0,0,0,0
+menuFont=Iosevka Nerd Font,12,-1,5,50,0,0,0,0,0
+toolBarFont=Iosevka Nerd Font,12,-1,5,50,0,0,0,0,0
+smallestReadableFont=Iosevka Nerd Font,10,-1,5,50,0,0,0,0,0
+
+[kdeglobals][WM]
+activeFont=Iosevka Nerd Font,12,-1,5,50,0,0,0,0,0
+
+[kdeglobals][KDE]
+widgetStyle=GlassyBlacknpink
+
+[kdeglobals][Icons]
+Theme=glassy-blacknpink
+
+[plasmarc][Theme]
+name=glassy-blacknpink
+
+[Wallpaper]
+Image=glassy-blacknpink
+
+[kcminputrc][Mouse]
+cursorTheme=glassy-blacknpink
+
+[kwinrc][org.kde.kdecoration2]
+library=glassyblacknpink
+theme=Glassy Black & Pink
+# The glass draws every window's edge, so the frame adds no border.
+BorderSize=None
+
+[ksplashrc][KSplash]
+Theme=glassy-blacknpink.desktop
