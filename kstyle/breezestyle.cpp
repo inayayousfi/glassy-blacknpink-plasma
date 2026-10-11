@@ -38,6 +38,10 @@
 #include <QGraphicsView>
 #include <QGroupBox>
 #include <QItemDelegate>
+
+#if BREEZE_HAVE_QTQUICK
+#include <QQuickWidget>
+#endif
 #include <QLineEdit>
 #include <QMainWindow>
 #include <QMdiArea>
@@ -341,6 +345,16 @@ void Style::polish(QWidget *widget)
         widget->setAttribute(Qt::WA_Hover);
     }
 
+#if BREEZE_HAVE_QTQUICK
+    // A Qt Quick widget, such as System Settings' sidebar, clears to opaque
+    // white by default and hides KWin's glass behind its window. Clear it to
+    // transparent and blend it over the window instead.
+    if (auto quickWidget = qobject_cast<QQuickWidget *>(widget); quickWidget && _helper->compositingActive()) {
+        quickWidget->setClearColor(Qt::transparent);
+        quickWidget->setAttribute(Qt::WA_AlwaysStackOnTop);
+    }
+#endif
+
     // enforce translucency for drag and drop window
     if (widget->testAttribute(Qt::WA_X11NetWmWindowTypeDND) && _helper->compositingActive()) {
         widget->setAttribute(Qt::WA_TranslucentBackground);
@@ -488,6 +502,10 @@ void Style::polish(QWidget *widget)
         auto dialogButtonBox = qobject_cast<QDialogButtonBox *>(pushButton->parent());
         pushButton->setAutoDefault(autoDefaultNoDialog || (autoDefaultInDialog && dialogButtonBox));
     }
+    // Tooltips are glass like every other surface.
+    if (widget->inherits("QTipLabel")) {
+        polishGlassWindow(widget);
+    }
     if (_toolsAreaManager->hasHeaderColors()) {
         // style TitleWidget and Search KPageView to look the same as KDE System Settings
         if (widget->objectName() == QLatin1String("KPageView::TitleWidget")) {
@@ -510,11 +528,13 @@ void Style::polish(QApplication *application)
 {
     _toolsAreaManager->registerApplication(application);
     _helper->installEventFilter(application);
+    _blurHelper->registerApplication(application);
 }
 
 void Style::unpolish(QApplication *application)
 {
     _helper->removeEventFilter(application);
+    _blurHelper->unregisterApplication(application);
 }
 
 //______________________________________________________________
@@ -4743,8 +4763,10 @@ bool Style::drawPanelTipLabelPrimitive(const QStyleOption *option, QPainter *pai
 
     const auto &palette(option->palette);
     const auto &background = palette.color(QPalette::ToolTipBase);
-    const auto outline(KColorUtils::mix(palette.color(QPalette::ToolTipBase), palette.color(QPalette::ToolTipText), _helper->frameIntensityBias()));
     const bool hasAlpha(_helper->hasAlphaChannel(widget));
+    // Over glass, the glass draws the outline.
+    const auto outline = hasAlpha ? QColor()
+                                  : KColorUtils::mix(palette.color(QPalette::ToolTipBase), palette.color(QPalette::ToolTipText), _helper->frameIntensityBias());
 
     _helper->renderMenuFrame(painter, option->rect, background, outline, hasAlpha);
     return true;
@@ -8535,15 +8557,10 @@ void Style::polishGlassWindow(QWidget *widget)
 //____________________________________________________________________________________
 void Style::polish(QPalette &palette)
 {
-    // Window and view backgrounds let KWin's glass show through; controls keep a faint frost.
+    // Window, view and button colors keep the color scheme's opacity, which
+    // lets KWin's glass show through; alternate rows keep a faint frost.
     for (const auto group : {QPalette::Active, QPalette::Inactive, QPalette::Disabled}) {
-        for (const auto role : {QPalette::Window, QPalette::Base}) {
-            QColor color = palette.color(group, role);
-            color.setAlpha(0);
-            palette.setColor(group, role, color);
-        }
         palette.setColor(group, QPalette::AlternateBase, _helper->alphaColor(Qt::white, 0.04));
-        palette.setColor(group, QPalette::Button, _helper->alphaColor(Qt::white, 0.08));
     }
 }
 

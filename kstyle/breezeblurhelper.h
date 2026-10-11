@@ -36,6 +36,12 @@ public:
     //! register widget
     void unregisterWidget(QWidget *);
 
+    //! watch the application's Qt Quick windows
+    void registerApplication(QApplication *);
+
+    //! stop watching the application's Qt Quick windows
+    void unregisterApplication(QApplication *);
+
     //! event filter
     bool eventFilter(QObject *, QEvent *) override;
 
@@ -51,7 +57,24 @@ protected:
     void update(QWidget *) const;
 
 private:
+    //* asks KWin for glass behind Qt Quick application windows without a background
+    class QuickWindowFilter : public QObject
+    {
+    public:
+        explicit QuickWindowFilter(BlurHelper *parent)
+            : QObject(parent)
+            , _helper(parent->_helper)
+        {
+        }
+
+        bool eventFilter(QObject *, QEvent *) override;
+
+    private:
+        std::shared_ptr<Helper> _helper;
+    };
+
     std::shared_ptr<Helper> _helper;
+    QuickWindowFilter *_quickWindowFilter = nullptr;
 };
 
 }

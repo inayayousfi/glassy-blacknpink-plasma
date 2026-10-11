@@ -15,12 +15,18 @@
 #include "breezeblurhelper.h"
 #include "breezehelper.h"
 #include "breezestyleconfigdata.h"
+#include "config-breeze.h"
 
 #include <KWindowEffects>
 
+#include <QApplication>
 #include <QEvent>
 #include <QMenu>
 #include <QVector>
+
+#if BREEZE_HAVE_QTQUICK
+#include <QQuickWindow>
+#endif
 
 namespace Breeze
 {
@@ -28,6 +34,7 @@ namespace Breeze
 BlurHelper::BlurHelper(const std::shared_ptr<Helper> &helper)
     : QObject()
     , _helper(helper)
+    , _quickWindowFilter(new QuickWindowFilter(this))
 {
 }
 
@@ -46,6 +53,39 @@ void BlurHelper::unregisterWidget(QWidget *widget)
 {
     // remove event filter
     widget->removeEventFilter(this);
+}
+
+//___________________________________________________________
+void BlurHelper::registerApplication(QApplication *application)
+{
+    application->removeEventFilter(_quickWindowFilter);
+    application->installEventFilter(_quickWindowFilter);
+}
+
+//___________________________________________________________
+void BlurHelper::unregisterApplication(QApplication *application)
+{
+    application->removeEventFilter(_quickWindowFilter);
+}
+
+//___________________________________________________________
+bool BlurHelper::QuickWindowFilter::eventFilter(QObject *object, QEvent *event)
+{
+#if BREEZE_HAVE_QTQUICK
+    // Kirigami windows paint the color scheme's window background, which is
+    // transparent so that KWin's glass shows through, as in widget windows.
+    if (event->type() == QEvent::Show) {
+        const auto window = qobject_cast<QQuickWindow *>(object);
+        if (window && !window->parent() && (window->type() == Qt::Window || window->type() == Qt::Dialog)
+            && !(window->flags() & Qt::FramelessWindowHint) && window->color().alpha() < 255 && _helper->compositingActive()) {
+            KWindowEffects::enableBlurBehind(window, true);
+        }
+    }
+#else
+    Q_UNUSED(object)
+    Q_UNUSED(event)
+#endif
+    return false;
 }
 
 //___________________________________________________________

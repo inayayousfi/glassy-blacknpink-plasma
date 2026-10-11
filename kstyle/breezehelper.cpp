@@ -737,6 +737,21 @@ void Helper::renderButtonFrame(QPainter *painter,
     painter->setPen(QPen(penBrush, PenWidth::Frame));
     const qreal radius = roundButton ? roundRadius : std::min(frameRect.width(), frameRect.height()) / 2;
     painter->drawRoundedRect(frameRect, radius, radius);
+
+    // On see-through glass, a raised button is its own slab of frosted glass:
+    // a soft sheen fades down from its top, and its edge catches the light at
+    // the top and fades toward the bottom, like the window's glass beneath it.
+    if (!flat && bgBrush.color().alpha() < 255) {
+        QLinearGradient sheen(frameRect.topLeft(), frameRect.bottomLeft());
+        sheen.setColorAt(0.0, alphaColor(Qt::white, 0.10));
+        sheen.setColorAt(0.6, alphaColor(Qt::white, 0.0));
+        QLinearGradient edge(frameRect.topLeft(), frameRect.bottomLeft());
+        edge.setColorAt(0.0, alphaColor(Qt::white, 0.32));
+        edge.setColorAt(1.0, alphaColor(Qt::white, 0.06));
+        painter->setBrush(sheen);
+        painter->setPen(QPen(QBrush(edge), PenWidth::Frame));
+        painter->drawRoundedRect(frameRect, radius, radius);
+    }
 }
 
 //______________________________________________________________________________

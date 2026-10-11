@@ -87,6 +87,7 @@ endif()
 if( BREEZE_HAVE_QTQUICK )
     target_link_libraries(breeze${QT_MAJOR_VERSION} 
         Qt${QT_MAJOR_VERSION}::Quick
+        Qt${QT_MAJOR_VERSION}::QuickWidgets
         KF${QT_MAJOR_VERSION}::CoreAddons
     )
 endif()

@@ -90,7 +90,7 @@ function(build_Qt5)
         WindowSystem)
 
     if(BUILD_WITH_QTQUICK)
-        find_package(Qt5 ${QT5_MIN_VERSION} REQUIRED COMPONENTS Quick)
+        find_package(Qt5 ${QT5_MIN_VERSION} REQUIRED COMPONENTS Quick QuickWidgets)
     endif()
 
     set(BREEZE_HAVE_KSTYLE ${KF5FrameworkIntegration_FOUND})
@@ -147,7 +147,7 @@ function(build_Qt6)
         WindowSystem)
 
     if(BUILD_WITH_QTQUICK)
-        find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Quick)
+        find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Quick QuickWidgets)
     endif()
 
     set(BREEZE_HAVE_KSTYLE ${KF6FrameworkIntegration_FOUND})
