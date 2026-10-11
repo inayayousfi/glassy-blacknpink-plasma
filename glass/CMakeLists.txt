@@ -22,8 +22,12 @@ configure_file(qmldir "${CMAKE_CURRENT_BINARY_DIR}/qmldir" COPYONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/qmldir" DESTINATION ${KDE_INSTALL_QMLDIR}/GlassyBlacknpink/Glass)
 
 # The KWin effect. Each build gets its own plugin name, so KWin loads the new
-# build instead of a copy it already holds in memory.
-add_library(glass MODULE glass.cpp glass.qrc)
+# build instead of a copy it already holds in memory. Its shaders sit under
+# that name too: KWin keeps earlier builds loaded, and Qt reads a resource
+# path from the first library that registered it.
+add_library(glass MODULE glass.cpp)
 set_target_properties(glass PROPERTIES OUTPUT_NAME "${GLASS_EFFECT_ID}" PREFIX "")
+target_compile_definitions(glass PRIVATE GLASS_EFFECT_ID="${GLASS_EFFECT_ID}")
+qt_add_resources(glass glass PREFIX "/${GLASS_EFFECT_ID}" FILES downsample.frag upsample.frag detail.frag busy.frag glass.frag)
 target_link_libraries(glass PRIVATE KWin::kwin KDecoration3::KDecoration)
 install(TARGETS glass DESTINATION ${KDE_INSTALL_PLUGINDIR}/kwin/effects/plugins)

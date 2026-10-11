@@ -43,8 +43,10 @@ package() {
     install -d "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants"
     ln -s ../glassy-blacknpink-rebuild.service \
         "$pkgdir/usr/lib/systemd/user/graphical-session.target.wants/glassy-blacknpink-rebuild.service"
-    install -Dm644 "$startdir/glass/LICENSE-OverShifted-LiquidGlass" \
-        "$pkgdir/usr/share/licenses/$pkgname/LICENSE-OverShifted-LiquidGlass"
+    local license
+    for license in LICENSE-OverShifted-LiquidGlass LICENSE-liquid-glass-js LICENSE-ybouane-liquidglass; do
+        install -Dm644 "$startdir/glass/$license" "$pkgdir/usr/share/licenses/$pkgname/$license"
+    done
 
     local data="$pkgdir/usr/share/$pkgname"
     install -d "$data"

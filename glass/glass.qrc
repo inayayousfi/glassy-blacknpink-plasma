@@ -1,6 +1,0 @@
-<RCC>
-    <qresource prefix="/glassy-blacknpink-glass">
-        <file>downsample.frag</file>
-        <file>glass.frag</file>
-    </qresource>
-</RCC>

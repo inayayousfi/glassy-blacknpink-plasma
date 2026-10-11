@@ -9,7 +9,7 @@
 // Glassy Black & Pink glass: KWin's blur, trimmed from 4v3ngR/kwin-effects-glass to
 // the one look this desktop uses. Windows that request a blur behind them get
 // a lightly frosted copy of the background, bent by the refraction shader in
-// glass.frag. Tooltips keep the frosting without refraction.
+// glass.frag, tooltips included.
 
 #include "core/pixelgrid.h"
 #include "core/region.h"
@@ -31,6 +31,8 @@
 #include <QFile>
 #include <QWindow>
 
+#include <chrono>
+#include <cmath>
 #include <unordered_map>
 
 Q_LOGGING_CATEGORY(GLASS, "glassy_blacknpink_glass", QtWarningMsg)
@@ -51,12 +53,30 @@ constexpr float s_menuRadius = 12;
 // One half-size pass at this sampling distance gives the light frosting.
 // It equals the old effect at blur strength 1 (offset 1.5) and fine-tune 3 (x0.89).
 constexpr float s_blurOffset = 1.335f;
-// The blur reads this far past the glass, so repaints must reach it too.
-constexpr int s_blurReach = 10;
+// The stronger frosts: the half-size copy blurred once more down to a
+// quarter, which turns small text into soft word shapes, and, for larger
+// text and shapes, blurred down to an eighth and spread back up to a
+// quarter. The shader picks how far to go by the size and strength of what
+// lies behind.
+constexpr int s_frostLevels = 4;
+constexpr float s_frostOffset = 3.0f;
+// The fine detail map is drawn at half size and smoothed down to a
+// sixteenth, where it tells the shader how busy the background is around
+// each point.
+constexpr int s_detailLevels = 4;
+constexpr float s_detailOffset = 4.0f;
+// The frost and the busyness measure reach this far, so repaints must reach
+// it too.
+constexpr int s_frostReach = 64;
+// When the background gets busier or calmer, the frost eases toward its new
+// amount with this time constant, in seconds, instead of jumping to it.
+constexpr float s_frostEase = 0.25f;
+// The frost counts as settled once it is this close to its target.
+constexpr float s_frostSettled = 0.004f;
 
 static std::unique_ptr<GLShader> loadShader(const QString &name)
 {
-    QFile file(QStringLiteral(":/glassy-blacknpink-glass/%1.frag").arg(name));
+    QFile file(QStringLiteral(":/" GLASS_EFFECT_ID "/%1.frag").arg(name));
     if (!file.open(QIODevice::ReadOnly)) {
         qCWarning(GLASS) << "Missing shader" << name;
         return nullptr;
@@ -83,6 +103,7 @@ public:
     }
 
     void prePaintScreen(ScreenPrePaintData &data) override;
+    void postPaintScreen() override;
     void prePaintWindow(RenderView *view, EffectWindow *w, WindowPrePaintData &data) override;
     void drawWindow(const RenderTarget &renderTarget, const RenderViewport &viewport, EffectWindow *w, int mask, const Region &deviceRegion, WindowPaintData &data) override;
 
@@ -113,15 +134,60 @@ public:
 private:
     struct RenderTargets
     {
-        // [0] holds the background behind the window, [1] its half-size blur.
-        std::unique_ptr<GLTexture> textures[2];
-        std::unique_ptr<GLFramebuffer> framebuffers[2];
+        // [0] holds the background behind the window, [1] its half-size blur,
+        // [2] the quarter-size frost, [3] the eighth-size step of the
+        // heavier frost, which heavier holds at a quarter size.
+        std::unique_ptr<GLTexture> textures[s_frostLevels];
+        std::unique_ptr<GLFramebuffer> framebuffers[s_frostLevels];
+        std::unique_ptr<GLTexture> heavier;
+        std::unique_ptr<GLFramebuffer> heavierFramebuffer;
+        // The fine detail map at a half, a quarter, an eighth and a sixteenth
+        // of the size.
+        std::unique_ptr<GLTexture> detail[s_detailLevels];
+        std::unique_ptr<GLFramebuffer> detailFramebuffers[s_detailLevels];
+        // The frost the background calls for, in one pixel, and two buffers
+        // that read it back in turn: each frame reads the one written the
+        // frame before, so the effect never waits for the GPU.
+        std::unique_ptr<GLTexture> amount;
+        std::unique_ptr<GLFramebuffer> amountFramebuffer;
+        GLuint readback[2] = {0, 0};
+        bool readbackFilled[2] = {false, false};
+        int readbackIndex = 0;
+
+        // The frost the glass shows, eased toward the measured one; below
+        // zero until the first measure.
+        float frost = -1;
+        std::chrono::steady_clock::time_point lastFrame;
+        // Whether the effect asked for the frame being drawn, to follow an
+        // easing or to read the newest measure.
+        bool followUp = false;
+
+        RenderTargets() = default;
+        RenderTargets(const RenderTargets &) = delete;
+        RenderTargets &operator=(const RenderTargets &) = delete;
+        ~RenderTargets()
+        {
+            release();
+        }
 
         void release()
         {
-            for (int i = 0; i < 2; ++i) {
+            if (readback[0]) {
+                glDeleteBuffers(2, readback);
+                readback[0] = readback[1] = 0;
+            }
+            readbackFilled[0] = readbackFilled[1] = false;
+            amountFramebuffer.reset();
+            amount.reset();
+            heavierFramebuffer.reset();
+            heavier.reset();
+            for (int i = 0; i < s_frostLevels; ++i) {
                 framebuffers[i].reset();
                 textures[i].reset();
+            }
+            for (int i = 0; i < s_detailLevels; ++i) {
+                detailFramebuffers[i].reset();
+                detail[i].reset();
             }
         }
     };
@@ -149,19 +215,28 @@ private:
     void draw(const RenderTarget &renderTarget, const RenderViewport &viewport, EffectWindow *w, Glass &glass, const Region &deviceRegion, const WindowPaintData &data);
 
     std::unique_ptr<GLShader> m_downsample;
+    std::unique_ptr<GLShader> m_upsample;
+    std::unique_ptr<GLShader> m_detail;
+    std::unique_ptr<GLShader> m_busy;
     std::unique_ptr<GLShader> m_glass;
     bool m_valid = false;
     RenderView *m_currentView = nullptr;
     std::unordered_map<EffectWindow *, Glass> m_windows;
     std::unordered_map<EffectWindow *, QMetaObject::Connection> m_surfaceConnections;
+    std::unordered_map<EffectWindow *, QMetaObject::Connection> m_decorationConnections;
+    // Areas whose frost is still easing, repainted after this frame.
+    Region m_easing;
 };
 
 GlassEffect::GlassEffect()
 {
     initResources();
     m_downsample = loadShader(QStringLiteral("downsample"));
+    m_upsample = loadShader(QStringLiteral("upsample"));
+    m_detail = loadShader(QStringLiteral("detail"));
+    m_busy = loadShader(QStringLiteral("busy"));
     m_glass = loadShader(QStringLiteral("glass"));
-    if (!m_downsample || !m_glass) {
+    if (!m_downsample || !m_upsample || !m_detail || !m_busy || !m_glass) {
         return;
     }
 
@@ -197,6 +272,11 @@ void GlassEffect::addWindow(EffectWindow *w)
     connect(w, &EffectWindow::windowFrameGeometryChanged, this, [this, w]() {
         updateRegion(w);
     });
+    // A title can change the glass, as the island's does when it opens.
+    connect(w->window(), &Window::captionChanged, this, [this, w]() {
+        updateRegion(w);
+        w->addRepaintFull();
+    });
     connect(w, &EffectWindow::windowDecorationChanged, this, [this, w]() {
         watchDecoration(w);
         updateRegion(w);
@@ -211,10 +291,16 @@ void GlassEffect::addWindow(EffectWindow *w)
 
 void GlassEffect::watchDecoration(EffectWindow *w)
 {
+    // One connection per window, replaced when the window gets a new
+    // decoration; Qt cannot keep a connection to a lambda unique by itself.
+    if (auto it = m_decorationConnections.find(w); it != m_decorationConnections.end()) {
+        disconnect(it->second);
+        m_decorationConnections.erase(it);
+    }
     if (KDecoration3::Decoration *decoration = w->decoration()) {
-        connect(decoration, &KDecoration3::Decoration::blurRegionChanged, this, [this, w]() {
+        m_decorationConnections[w] = connect(decoration, &KDecoration3::Decoration::blurRegionChanged, this, [this, w]() {
             updateRegion(w);
-        }, Qt::UniqueConnection);
+        });
     }
 }
 
@@ -228,6 +314,10 @@ void GlassEffect::removeWindow(EffectWindow *w)
         disconnect(it->second);
         m_surfaceConnections.erase(it);
     }
+    if (auto it = m_decorationConnections.find(w); it != m_decorationConnections.end()) {
+        disconnect(it->second);
+        m_decorationConnections.erase(it);
+    }
 }
 
 bool GlassEffect::eventFilter(QObject *watched, QEvent *event)
@@ -239,6 +329,22 @@ bool GlassEffect::eventFilter(QObject *watched, QEvent *event)
         }
     }
     return false;
+}
+
+// Whether a surface holds text to read, which makes the glass frost from a
+// calmer background: application windows, dialogs, menus, popups,
+// notifications and the open island do; the shell, with icons and a few
+// words, does not: panels, the dock, on-screen displays and the closed island
+// pill.
+static bool holdsText(EffectWindow *w)
+{
+    // The island is one window whose title follows its state.
+    static const QString island = QStringLiteral("Glassy Black & Pink Island");
+    if (w->caption().startsWith(island)) {
+        return w->caption() != island + QStringLiteral(" Compact");
+    }
+    return w->isNormalWindow() || w->isDialog() || w->isMenu() || w->isDropdownMenu() || w->isPopupMenu() || w->isComboBox()
+        || w->isPopupWindow() || w->isNotification() || w->isCriticalNotification();
 }
 
 void GlassEffect::updateRegion(EffectWindow *w)
@@ -281,8 +387,8 @@ void GlassEffect::updateRegion(EffectWindow *w)
     glass.frame = frame;
     if (!glass.item) {
         glass.item = std::make_unique<BackgroundEffectItem>(w->windowItem());
-        glass.item->setPixelsToExpandRepaintsBelowOpaqueRegions(s_blurReach);
     }
+    glass.item->setPixelsToExpandRepaintsBelowOpaqueRegions(s_frostReach);
     glass.item->setEffectBoundingRect(shape(w, glass).boundingRect());
 }
 
@@ -334,6 +440,15 @@ void GlassEffect::prePaintScreen(ScreenPrePaintData &data)
 {
     m_currentView = data.view;
     effects->prePaintScreen(data);
+}
+
+void GlassEffect::postPaintScreen()
+{
+    effects->postPaintScreen();
+    if (!m_easing.isEmpty()) {
+        effects->addRepaint(m_easing);
+        m_easing = Region();
+    }
 }
 
 void GlassEffect::prePaintWindow(RenderView *view, EffectWindow *w, WindowPrePaintData &data)
@@ -421,25 +536,58 @@ void GlassEffect::draw(const RenderTarget &renderTarget, const RenderViewport &v
     if (!targets.textures[0] || targets.textures[0]->size() != backgroundRect.size() || targets.textures[0]->internalFormat() != textureFormat) {
         targets.release();
         glClearColor(0, 0, 0, 0);
-        for (int i = 0; i < 2; ++i) {
-            targets.textures[i] = GLTexture::allocate(textureFormat, backgroundRect.size() / (1 << i));
-            if (!targets.textures[i]) {
+        auto allocate = [&](std::unique_ptr<GLTexture> &texture, std::unique_ptr<GLFramebuffer> &framebuffer, int shrink) {
+            texture = GLTexture::allocate(textureFormat, (backgroundRect.size() / (1 << shrink)).expandedTo(QSize(1, 1)));
+            if (!texture) {
                 qCWarning(GLASS) << "Failed to allocate an offscreen texture";
-                targets.release();
-                return;
+                return false;
             }
-            targets.textures[i]->setFilter(GL_LINEAR);
-            targets.textures[i]->setWrapMode(GL_CLAMP_TO_EDGE);
-            targets.framebuffers[i] = std::make_unique<GLFramebuffer>(targets.textures[i].get());
-            if (!targets.framebuffers[i]->valid()) {
+            texture->setFilter(GL_LINEAR);
+            texture->setWrapMode(GL_CLAMP_TO_EDGE);
+            framebuffer = std::make_unique<GLFramebuffer>(texture.get());
+            if (!framebuffer->valid()) {
                 qCWarning(GLASS) << "Failed to create an offscreen framebuffer";
-                targets.release();
-                return;
+                return false;
             }
-            EglContext::currentContext()->pushFramebuffer(targets.framebuffers[i].get());
+            EglContext::currentContext()->pushFramebuffer(framebuffer.get());
             glClear(GL_COLOR_BUFFER_BIT);
             EglContext::currentContext()->popFramebuffer();
+            return true;
+        };
+        for (int i = 0; i < s_frostLevels; ++i) {
+            if (!allocate(targets.textures[i], targets.framebuffers[i], i)) {
+                targets.release();
+                return;
+            }
         }
+        if (!allocate(targets.heavier, targets.heavierFramebuffer, 2)) {
+            targets.release();
+            return;
+        }
+        for (int i = 0; i < s_detailLevels; ++i) {
+            if (!allocate(targets.detail[i], targets.detailFramebuffers[i], i + 1)) {
+                targets.release();
+                return;
+            }
+        }
+        targets.amount = GLTexture::allocate(GL_RGBA8, QSize(1, 1));
+        if (!targets.amount) {
+            qCWarning(GLASS) << "Failed to allocate the frost amount texture";
+            targets.release();
+            return;
+        }
+        targets.amountFramebuffer = std::make_unique<GLFramebuffer>(targets.amount.get());
+        if (!targets.amountFramebuffer->valid()) {
+            qCWarning(GLASS) << "Failed to create the frost amount framebuffer";
+            targets.release();
+            return;
+        }
+        glGenBuffers(2, targets.readback);
+        for (const GLuint buffer : targets.readback) {
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, buffer);
+            glBufferData(GL_PIXEL_PACK_BUFFER, 4, nullptr, GL_STREAM_READ);
+        }
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
     }
 
     // Copy the background behind the glass. The texture keeps earlier frames,
@@ -496,7 +644,127 @@ void GlassEffect::draw(const RenderTarget &renderTarget, const RenderViewport &v
     GLFramebuffer::pushFramebuffer(targets.framebuffers[1].get());
     vbo->draw(GL_TRIANGLES, 0, 6);
     GLFramebuffer::popFramebuffer();
+
+    // Stronger frosts: halve the half-size copy down to a quarter and an
+    // eighth, then spread the eighth back up to a quarter.
+    m_downsample->setUniform("offset", s_frostOffset);
+    for (int i = 2; i < s_frostLevels; ++i) {
+        GLTexture *read = targets.textures[i - 1].get();
+        m_downsample->setUniform("halfpixel", QVector2D(0.5 / read->width(), 0.5 / read->height()));
+        read->bind();
+        GLFramebuffer::pushFramebuffer(targets.framebuffers[i].get());
+        vbo->draw(GL_TRIANGLES, 0, 6);
+        GLFramebuffer::popFramebuffer();
+    }
     ShaderManager::instance()->popShader();
+    ShaderManager::instance()->pushShader(m_upsample.get());
+    m_upsample->setUniform("modelViewProjectionMatrix", offscreenProjection);
+    m_upsample->setUniform("offset", s_frostOffset);
+    {
+        GLTexture *read = targets.textures[3].get();
+        m_upsample->setUniform("halfpixel", QVector2D(0.5 / read->width(), 0.5 / read->height()));
+        read->bind();
+        GLFramebuffer::pushFramebuffer(targets.heavierFramebuffer.get());
+        vbo->draw(GL_TRIANGLES, 0, 6);
+        GLFramebuffer::popFramebuffer();
+    }
+    ShaderManager::instance()->popShader();
+
+    // Detail: map how much the background changes at three sizes at half
+    // size, then smooth the map down to a sixteenth.
+    ShaderManager::instance()->pushShader(m_detail.get());
+    m_detail->setUniform("modelViewProjectionMatrix", offscreenProjection);
+    m_detail->setUniform("halfpixel", QVector2D(0.5 / background->width(), 0.5 / background->height()));
+    m_detail->setUniform("frostUnit", 1);
+    m_detail->setUniform("quarterUnit", 2);
+    m_detail->setUniform("heavierUnit", 3);
+    glActiveTexture(GL_TEXTURE3);
+    targets.heavier->bind();
+    glActiveTexture(GL_TEXTURE2);
+    targets.textures[2]->bind();
+    glActiveTexture(GL_TEXTURE1);
+    targets.textures[1]->bind();
+    glActiveTexture(GL_TEXTURE0);
+    background->bind();
+    GLFramebuffer::pushFramebuffer(targets.detailFramebuffers[0].get());
+    vbo->draw(GL_TRIANGLES, 0, 6);
+    GLFramebuffer::popFramebuffer();
+    glActiveTexture(GL_TEXTURE3);
+    targets.heavier->unbind();
+    glActiveTexture(GL_TEXTURE2);
+    targets.textures[2]->unbind();
+    glActiveTexture(GL_TEXTURE1);
+    targets.textures[1]->unbind();
+    glActiveTexture(GL_TEXTURE0);
+    ShaderManager::instance()->popShader();
+    ShaderManager::instance()->pushShader(m_downsample.get());
+    m_downsample->setUniform("offset", s_detailOffset);
+    for (int i = 1; i < s_detailLevels; ++i) {
+        GLTexture *read = targets.detail[i - 1].get();
+        m_downsample->setUniform("halfpixel", QVector2D(0.5 / read->width(), 0.5 / read->height()));
+        read->bind();
+        GLFramebuffer::pushFramebuffer(targets.detailFramebuffers[i].get());
+        vbo->draw(GL_TRIANGLES, 0, 6);
+        GLFramebuffer::popFramebuffer();
+    }
+    ShaderManager::instance()->popShader();
+
+    // The pane in device pixels, measured from the bottom left of the glass
+    // like the texture coordinates: its center and half size.
+    const QRectF devicePaneRect(QPointF(pane.x() - backgroundRect.x(),
+                                        (backgroundRect.y() + backgroundRect.height()) - (pane.y() + pane.height())) * viewport.scale(),
+                                QSizeF(pane.width(), pane.height()) * viewport.scale());
+    const QVector4D devicePane(devicePaneRect.center().x(), devicePaneRect.center().y(),
+                               devicePaneRect.width() * 0.5, devicePaneRect.height() * 0.5);
+
+    // Frost amount: measure how much the pane should frost into one pixel and
+    // start reading it back. The frame reads the measure written the frame
+    // before, except the first, which waits for its own.
+    ShaderManager::instance()->pushShader(m_busy.get());
+    m_busy->setUniform("modelViewProjectionMatrix", offscreenProjection);
+    m_busy->setUniform("pane", devicePane);
+    m_busy->setUniform("blurSize", QVector2D(scaledBackgroundRect.width(), scaledBackgroundRect.height()));
+    m_busy->setUniform("content", holdsText(w) ? 1.0f : 0.0f);
+    targets.detail[s_detailLevels - 1]->bind();
+    GLFramebuffer::pushFramebuffer(targets.amountFramebuffer.get());
+    vbo->draw(GL_TRIANGLES, 0, 6);
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, targets.readback[targets.readbackIndex]);
+    glReadPixels(0, 0, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    GLFramebuffer::popFramebuffer();
+    targets.readbackFilled[targets.readbackIndex] = true;
+    ShaderManager::instance()->popShader();
+    const int previous = 1 - targets.readbackIndex;
+    const int ready = targets.frost < 0 ? targets.readbackIndex : previous;
+    float target = -1;
+    if (targets.readbackFilled[ready]) {
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, targets.readback[ready]);
+        if (const void *mapped = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, 4, GL_MAP_READ_BIT)) {
+            target = static_cast<const unsigned char *>(mapped)[0] / 255.0f;
+            glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+        }
+    }
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    targets.readbackIndex = previous;
+
+    // Ease the frost toward the measure, by the time since the last frame.
+    const auto now = std::chrono::steady_clock::now();
+    if (targets.frost < 0) {
+        targets.frost = std::max(target, 0.0f);
+    } else if (target >= 0) {
+        const float elapsed = std::clamp(std::chrono::duration<float>(now - targets.lastFrame).count(), 0.0f, 0.1f);
+        targets.frost += (target - targets.frost) * (1.0f - std::exp(-elapsed / s_frostEase));
+        if (std::abs(target - targets.frost) <= s_frostSettled) {
+            targets.frost = target;
+        }
+    }
+    targets.lastFrame = now;
+    // Keep repainting while the frost eases, and once after any other change
+    // to read the measure it caused.
+    const bool followUp = targets.followUp;
+    targets.followUp = !followUp || target < 0 || target != targets.frost;
+    if (targets.followUp) {
+        m_easing += Rect(backgroundRect);
+    }
 
     // Refract: draw the frosted background through the glass onto the screen.
     const float radius = cornerRadius(w);
@@ -511,19 +779,32 @@ void GlassEffect::draw(const RenderTarget &renderTarget, const RenderViewport &v
     m_glass->setUniform("halfpixel", QVector2D(0.5 / frosted->width(), 0.5 / frosted->height()));
     m_glass->setUniform("cornerRadius", borderRadius.scaled(viewport.scale()).rounded().toVector());
     m_glass->setUniform("blurSize", QVector2D(scaledBackgroundRect.width(), scaledBackgroundRect.height()));
-    // The pane in device pixels, measured from the bottom left of the glass
-    // like the texture coordinates.
-    const QRectF devicePane(QPointF(pane.x() - backgroundRect.x(),
-                                    (backgroundRect.y() + backgroundRect.height()) - (pane.y() + pane.height())) * viewport.scale(),
-                            QSizeF(pane.width(), pane.height()) * viewport.scale());
-    m_glass->setUniform("pane", QVector4D(devicePane.center().x(), devicePane.center().y(),
-                                          devicePane.width() * 0.5, devicePane.height() * 0.5));
+    m_glass->setUniform("pane", devicePane);
     m_glass->setUniform("opacity", float(data.opacity() * data.opacity()));
-    m_glass->setUniform("refraction", w->isTooltip() ? 0 : 1);
+    m_glass->setUniform("refraction", 1);
+    m_glass->setUniform("frost", targets.frost);
+    m_glass->setUniform("sharpUnit", 1);
+    m_glass->setUniform("frostUnit", 2);
+    m_glass->setUniform("heavierUnit", 3);
     glEnable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    // The rim refracts the unblurred background; the face mixes in the frosting.
+    glActiveTexture(GL_TEXTURE3);
+    targets.heavier->bind();
+    glActiveTexture(GL_TEXTURE2);
+    targets.textures[2]->bind();
+    glActiveTexture(GL_TEXTURE1);
+    targets.textures[0]->bind();
+    glActiveTexture(GL_TEXTURE0);
     frosted->bind();
     vbo->draw(GL_TRIANGLES, 6, screenVertexCount);
+    glActiveTexture(GL_TEXTURE3);
+    targets.heavier->unbind();
+    glActiveTexture(GL_TEXTURE2);
+    targets.textures[2]->unbind();
+    glActiveTexture(GL_TEXTURE1);
+    targets.textures[0]->unbind();
+    glActiveTexture(GL_TEXTURE0);
     glDisable(GL_BLEND);
     ShaderManager::instance()->popShader();
     vbo->unbindArrays();
