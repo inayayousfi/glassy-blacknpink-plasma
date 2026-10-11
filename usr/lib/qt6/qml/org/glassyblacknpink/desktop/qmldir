@@ -1,0 +1,6 @@
+module org.glassyblacknpink.desktop
+import org.kde.desktop auto
+ComboBox 1.0 ComboBox.qml
+Dialog 1.0 Dialog.qml
+Menu 1.0 Menu.qml
+Popup 1.0 Popup.qml

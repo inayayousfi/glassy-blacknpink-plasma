@@ -10,6 +10,8 @@ The theme contains:
 
 - the color scheme, Plasma style, icon and cursor theme, black splash screen and black wallpaper;
 
+- a Qt Quick style that keeps KDE's controls but gives menus, dropdowns, pop-ups and dialogs a solid black background, because they are drawn inside their window where the glass cannot reach them; the Plasma session turns it on unless another style is set;
+
 - a top panel with a clock island holding paged Plasma controls, and an application dock, on every display.
 
 Files under `usr/` and `etc/` keep the path they are installed to.

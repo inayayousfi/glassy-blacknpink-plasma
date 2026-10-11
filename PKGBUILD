@@ -12,7 +12,7 @@ license=('GPL-2.0-or-later' 'GPL-3.0-or-later' 'LGPL-2.1-or-later' 'MIT')
 depends=('breeze' 'frameworkintegration' 'kcmutils' 'kcolorscheme' 'kconfig' 'kcoreaddons'
          'kdecoration' 'kguiaddons' 'ki18n' 'kiconthemes' 'kirigami' 'kwidgetsaddons'
          'kwin' 'kwindowsystem' 'plasma-workspace' 'qt6-base' 'qt6-declarative' 'qt6-svg'
-         'qt6-tools' 'ttf-iosevka-nerd')
+         'qt6-tools' 'qqc2-desktop-style' 'ttf-iosevka-nerd')
 makedepends=('cmake' 'ninja' 'extra-cmake-modules')
 
 _effect_id() {

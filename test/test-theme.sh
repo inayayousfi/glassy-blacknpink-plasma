@@ -243,4 +243,13 @@ done
 systemd-analyze verify "$unit_dir"/*.service
 desktop-file-validate "$repo_root/etc/xdg/autostart/glassy-blacknpink-layout.desktop"
 bash -n "$repo_root/install.sh" "$repo_root/usr/bin/glassy-blacknpink-layout" "$repo_root/usr/bin/glassy-blacknpink-rebuild"
-printf '%s\n' 'Theme files, cursors, widgets and layout command tests passed.'
+# The Qt Quick style, loaded from this repository by the name the session sets.
+quick_style="$(env -u QT_QUICK_CONTROLS_STYLE bash -c '. "$1"; printf %s "$QT_QUICK_CONTROLS_STYLE"' _ \
+    "$repo_root/etc/xdg/plasma-workspace/env/glassy-blacknpink-quick-style.sh")"
+mkdir -p "$test_root/quick-style"
+cp "$repo_root/usr/share/color-schemes/GlassyBlacknpink.colors" "$test_root/quick-style/kdeglobals"
+XDG_CONFIG_HOME="$test_root/quick-style" QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME=kde \
+    QT_QUICK_CONTROLS_STYLE="$quick_style" QML_IMPORT_PATH="$repo_root/usr/lib/qt6/qml" \
+    timeout 20 /usr/lib/qt6/bin/qml "$repo_root/test/test-quick-style.qml" \
+    || fail "The Qt Quick style did not give pop-ups a solid black background"
+printf '%s\n' 'Theme files, cursors, widgets and layout command and Qt Quick style tests passed.'
