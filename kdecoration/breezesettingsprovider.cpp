@@ -17,7 +17,7 @@ SettingsProvider *SettingsProvider::s_self = nullptr;
 
 //__________________________________________________________________
 SettingsProvider::SettingsProvider()
-    : m_config(KSharedConfig::openConfig(QStringLiteral("breezerc")))
+    : m_config(KSharedConfig::openConfig(QStringLiteral("glassyblacknpinkrc")))
 {
     reconfigure();
 }

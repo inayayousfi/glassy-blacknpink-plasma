@@ -59,6 +59,7 @@ kconfig_add_kcfg_files(breeze_PART_SRCS breezestyleconfigdata.kcfgc)
 
 
 add_library(breeze${QT_MAJOR_VERSION} MODULE ${breeze_PART_SRCS})
+set_target_properties(breeze${QT_MAJOR_VERSION} PROPERTIES OUTPUT_NAME glassyblacknpink${QT_MAJOR_VERSION})
 
 ecm_qt_declare_logging_category(breeze${QT_MAJOR_VERSION}
     HEADER
@@ -121,7 +122,7 @@ endif()
 
 ########### install files ###############
 install(TARGETS breeze${QT_MAJOR_VERSION}  DESTINATION ${KDE_INSTALL_QTPLUGINDIR}/styles/)
-install(FILES breeze.themerc  DESTINATION  ${KDE_INSTALL_DATADIR}/kstyle/themes)
+install(FILES glassyblacknpink.themerc  DESTINATION  ${KDE_INSTALL_DATADIR}/kstyle/themes)
 
 ########### subdirectories ###############
 

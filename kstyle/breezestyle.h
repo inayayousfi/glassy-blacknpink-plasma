@@ -86,12 +86,16 @@ public:
 
     //* application polishing
     void polish(QApplication *) override;
+    void polish(QPalette &) override;
 
     //* application unpolishing
     void unpolish(QApplication *) override;
 
     //* polish scrollarea
     void polishScrollArea(QAbstractScrollArea *);
+
+    //* make a top-level window translucent with KWin glass behind it
+    void polishGlassWindow(QWidget *);
 
     //* pixel metrics
     int pixelMetric(PixelMetric, const QStyleOption * = nullptr, const QWidget * = nullptr) const override;

@@ -472,12 +472,12 @@ void Helper::renderFrameWithSides(QPainter *painter, const QRectF &rect, const Q
 }
 
 //______________________________________________________________________________
-void Helper::renderFrame(QPainter *painter, const QRectF &rect, const QColor &color, const QColor &outline) const
+void Helper::renderFrame(QPainter *painter, const QRectF &rect, const QColor &color, const QColor &outline, bool pill) const
 {
     painter->setRenderHint(QPainter::Antialiasing);
 
     QRectF frameRect(rect);
-    qreal radius(frameRadius(PenWidth::NoPen));
+    qreal radius(pill ? std::min(rect.width(), rect.height()) / 2 : frameRadius(PenWidth::NoPen));
 
     // set pen
     if (outline.isValid()) {
@@ -565,7 +565,7 @@ void Helper::renderMenuFrame(QPainter *painter, const QRectF &rect, const QColor
         painter->setRenderHint(QPainter::Antialiasing);
         QRectF frameRect(rect);
 
-        qreal radius(Metrics::Frame_FrameRadius);
+        qreal radius(Metrics::Popup_FrameRadius);
 
         frameRect.adjust( //
             seamlessEdges.testFlag(Qt::LeftEdge) ? -radius : 0,
@@ -623,7 +623,7 @@ QRegion Helper::menuFrameRegion(const QMenu *widget)
     if (roundCorners) {
         QRectF frameRect(widget->rect());
 
-        qreal radius(Metrics::Frame_FrameRadius);
+        qreal radius(Metrics::Popup_FrameRadius);
 
         frameRect.adjust( //
             seamlessEdges.testFlag(Qt::LeftEdge) ? -radius : 0,
@@ -727,7 +727,7 @@ void Helper::renderButtonFrame(QPainter *painter,
     const qreal roundRadius = std::max(rect.width(), rect.height()) / 2;
     // Shadow
     if (isActiveWindow && !(flat || down || checked) && enabled) {
-        const qreal shadowRadius = roundButton ? roundRadius : Metrics::Frame_FrameRadius - PenWidth::Shadow / 2;
+        const qreal shadowRadius = roundButton ? roundRadius : std::min(shadowedRect.width(), shadowedRect.height()) / 2;
         renderRoundedRectShadow(painter, shadowedRect, shadowColor(palette), shadowRadius);
     }
 
@@ -735,7 +735,7 @@ void Helper::renderButtonFrame(QPainter *painter,
     painter->setRenderHint(QPainter::Antialiasing, true);
     painter->setBrush(bgBrush);
     painter->setPen(QPen(penBrush, PenWidth::Frame));
-    const qreal radius = roundButton ? roundRadius : frameRadius(PenWidth::Frame);
+    const qreal radius = roundButton ? roundRadius : std::min(frameRect.width(), frameRect.height()) / 2;
     painter->drawRoundedRect(frameRect, radius, radius);
 }
 
@@ -1436,75 +1436,37 @@ void Helper::renderTabBarTab(QPainter *painter,
                              Corners corners,
                              qreal animation) const
 {
+    Q_UNUSED(corners)
     bool enabled = stateProperties.value("enabled", true);
     bool hovered = stateProperties.value("hovered");
     bool selected = stateProperties.value("selected");
-    bool documentMode = stateProperties.value("documentMode");
-    bool north = stateProperties.value("north");
-    bool south = stateProperties.value("south");
-    bool west = stateProperties.value("west");
-    bool east = stateProperties.value("east");
     bool animated = animation != AnimationData::OpacityInvalid;
-    bool isQtQuickControl = stateProperties.value("isQtQuickControl");
-    bool hasAlteredBackground = stateProperties.value("hasAlteredBackground");
 
-    // setup painter
+    // Each tab is a free-standing pill on the glass, inset from its neighbours.
     painter->setRenderHint(QPainter::Antialiasing, true);
-    QRectF frameRect = rect;
-    QColor bgBrush;
+    const qreal inset = Metrics::Frame_FrameWidth;
+    const QRectF pillRect = rect.adjusted(inset, inset, -inset, -inset);
+    const qreal radius = std::min(pillRect.width(), pillRect.height()) / 2;
+    const QColor highlight = palette.color(QPalette::Highlight);
 
     if (selected) {
-        // overlap border
-        // This covers just enough of the border, so that both the border and its
-        // antialiasing effect is covered. On 100% scale it does nothing
-        const qreal overlap = devicePixelRatio(painter) * devicePixelRatio(painter);
-        frameRect.adjust(east ? -overlap : 0, south ? -overlap : 0, west ? overlap : 0, north ? overlap : 0);
-
-        if (documentMode && !isQtQuickControl && !hasAlteredBackground) {
-            bgBrush = palette.color(QPalette::Window);
-        } else {
-            bgBrush = frameBackgroundColor(palette);
-        }
-        QColor penBrush = KColorUtils::mix(bgBrush, palette.color(QPalette::WindowText), frameIntensityBias());
-        painter->setBrush(bgBrush);
-        painter->setPen(QPen(penBrush, PenWidth::Frame));
-        QRectF highlightRect = frameRect;
-        if (north || south) {
-            highlightRect.setHeight(Metrics::TabBar_ActiveEffectSize);
-        } else if (west || east) {
-            highlightRect.setWidth(Metrics::TabBar_ActiveEffectSize);
-        }
-        if (south) {
-            highlightRect.moveBottom(frameRect.bottom());
-        } else if (east) {
-            highlightRect.moveRight(frameRect.right());
-        }
-        QPainterPath path = roundedPath(strokedRect(frameRect), corners, frameRadius(PenWidth::Frame));
-        painter->drawPath(path);
-        QPainterPath highlightPath = roundedPath(highlightRect, corners, Metrics::Frame_FrameRadius);
-        painter->setBrush(palette.color(QPalette::Highlight));
-        painter->setPen(Qt::NoPen);
-        painter->drawPath(highlightPath);
-    } else {
-        // don't overlap border
-        // Since we don't set the rectangle as strokedRect here, modify only one side of it
-        // the same amount strokedRect method would, to make it snap next to the border
-        const qreal overlap = PenWidth::Frame;
-        frameRect.adjust(east ? overlap : 0, south ? overlap : 0, west ? -overlap : 0, north ? -overlap : 0);
-
-        const auto windowColor = palette.color(QPalette::Window);
-        bgBrush = windowColor.darker(120);
-        const auto hover = alphaColor(hoverColor(palette), 0.2);
-        if (animated) {
-            bgBrush = KColorUtils::mix(bgBrush, hover, animation);
-        } else if (enabled && hovered && !selected) {
-            bgBrush = hover;
-        }
-        painter->setBrush(bgBrush);
-        painter->setPen(Qt::NoPen);
-        QPainterPath path = roundedPath(frameRect, corners, Metrics::Frame_FrameRadius);
-        painter->drawPath(path);
+        painter->setBrush(alphaColor(highlight, highlightBackgroundAlpha));
+        painter->setPen(QPen(highlight, PenWidth::Frame));
+        const QRectF frameRect = strokedRect(pillRect);
+        painter->drawRoundedRect(frameRect, radius, radius);
+        return;
     }
+
+    QColor bgBrush(Qt::transparent);
+    const auto hover = alphaColor(hoverColor(palette), 0.2);
+    if (animated) {
+        bgBrush = KColorUtils::mix(bgBrush, hover, animation);
+    } else if (enabled && hovered) {
+        bgBrush = hover;
+    }
+    painter->setBrush(bgBrush);
+    painter->setPen(Qt::NoPen);
+    painter->drawRoundedRect(pillRect, radius, radius);
 }
 
 //______________________________________________________________________________

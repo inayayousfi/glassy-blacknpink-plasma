@@ -177,7 +177,8 @@ public:
     void renderFocusLine(QPainter *, const QRectF &, const QColor &) const;
 
     //* generic frame
-    void renderFrame(QPainter *, const QRectF &, const QColor &color, const QColor &outline = QColor()) const;
+    //* pill draws the frame with fully rounded ends, as used by input controls
+    void renderFrame(QPainter *, const QRectF &, const QColor &color, const QColor &outline = QColor(), bool pill = false) const;
 
     //* generic frame, with separators only on the side
     void renderFrameWithSides(QPainter *, const QRectF &, const QColor &color, Qt::Edges edges, const QColor &outline = QColor()) const;

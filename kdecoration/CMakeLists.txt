@@ -20,7 +20,7 @@ add_library(breezedecoration MODULE
     ${breezedecoration_config_PART_FORMS_HEADERS})
 
 set_target_properties(breezedecoration PROPERTIES
-    OUTPUT_NAME org.kde.breeze
+    OUTPUT_NAME glassyblacknpink
 )
 
 target_link_libraries(breezedecoration

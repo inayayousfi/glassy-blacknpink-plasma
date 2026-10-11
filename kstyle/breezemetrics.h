@@ -40,6 +40,8 @@ struct Metrics {
     // frames
     static constexpr int Frame_FrameWidth = 2;
     static constexpr int Frame_FrameRadius = 5;
+    // Menus, tooltips and popups match the corner radius of the KWin glass behind them.
+    static constexpr int Popup_FrameRadius = 12;
 
     // layout
     static constexpr int Layout_TopLevelMarginWidth = 10;

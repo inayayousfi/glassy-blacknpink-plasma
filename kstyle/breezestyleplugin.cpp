@@ -14,7 +14,7 @@ namespace Breeze
 //_________________________________________________
 QStyle *StylePlugin::create(const QString &key)
 {
-    if (key.compare(QLatin1String("breeze"), Qt::CaseInsensitive) == 0) {
+    if (key.compare(QLatin1String("glassyblacknpink"), Qt::CaseInsensitive) == 0) {
         return new Style;
     }
     return nullptr;
@@ -23,7 +23,7 @@ QStyle *StylePlugin::create(const QString &key)
 //_________________________________________________
 QStringList StylePlugin::keys() const
 {
-    return QStringList(QStringLiteral("Breeze"));
+    return QStringList(QStringLiteral("GlassyBlacknpink"));
 }
 
 }

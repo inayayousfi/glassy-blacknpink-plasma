@@ -39,6 +39,8 @@ include(GtkUpdateIconCache)
 option(BUILD_QT5 "Build Qt5 style" ON)
 option(BUILD_QT6 "Build with Qt6" ON)
 option(BUILD_CURSOR "Build Breeze Cursor" ON)
+# This style installs beside stock Breeze, which already provides these files.
+option(WITH_BREEZE_ASSETS "Install the colors, cursors, wallpapers, translations and scripts that stock Breeze provides" OFF)
 option(BUILD_WITH_QTQUICK "Build with Qt Quick features enabled" ON)
 
 set(QT_NO_CREATE_VERSIONLESS_TARGETS ON)
@@ -153,16 +155,19 @@ function(build_Qt6)
 
     add_subdirectory(kstyle kstyle6)
     add_subdirectory(libbreezecommon libbreezecommon6)
-    add_subdirectory(misc)
+    if(WITH_BREEZE_ASSETS)
+        add_subdirectory(misc)
+    endif()
 
     if(WITH_DECORATIONS)
         find_package(KDecoration3 REQUIRED)
         add_subdirectory(kdecoration)
     endif()
-    if (WITH_WALLPAPERS)
+    if (WITH_WALLPAPERS AND WITH_BREEZE_ASSETS)
         add_subdirectory(wallpapers)
     endif()
 
+    if(WITH_BREEZE_ASSETS)
     ki18n_install(po)
 
     # create a Config.cmake and a ConfigVersion.cmake file and install them
@@ -182,6 +187,7 @@ function(build_Qt6)
             DESTINATION "${CMAKECONFIG_INSTALL_DIR}"
             COMPONENT Devel
     )
+    endif()
 
     unset(QUERY_EXECUTABLE CACHE)
 endfunction()
@@ -201,7 +207,9 @@ function(build_colors_and_cursors)
     endif()
 endfunction()
 
-build_colors_and_cursors()
+if(WITH_BREEZE_ASSETS)
+    build_colors_and_cursors()
+endif()
 
 # add clang-format target for all our real source files
 file(GLOB_RECURSE ALL_CLANG_FORMAT_SOURCE_FILES *.cpp *.h)

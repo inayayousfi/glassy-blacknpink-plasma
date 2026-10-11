@@ -58,6 +58,7 @@
 #include <QToolButton>
 #include <QTreeView>
 #include <QWidgetAction>
+#include <QWindow>
 
 #if HAVE_QTDBUS
 #include <QDBusConnection>
@@ -462,10 +463,12 @@ void Style::polish(QWidget *widget)
 
     } else if (qobject_cast<QMainWindow *>(widget)) {
         widget->setAttribute(Qt::WA_StyledBackground);
+        polishGlassWindow(widget);
     } else if (qobject_cast<QDialogButtonBox *>(widget)) {
         addEventFilter(widget);
     } else if (qobject_cast<QDialog *>(widget)) {
         widget->setAttribute(Qt::WA_StyledBackground);
+        polishGlassWindow(widget);
     } else if (auto pushButton = qobject_cast<QPushButton *>(widget)) {
         QDialog *dialog = nullptr;
         auto p = pushButton->parentWidget();
@@ -1319,7 +1322,9 @@ void Style::drawPrimitive(PrimitiveElement element, const QStyleOption *option, 
 bool Style::drawWidgetPrimitive(const QStyleOption *option, QPainter *painter, const QWidget *widget) const
 {
     Q_UNUSED(option)
-    const auto drawBackground = _toolsAreaManager->hasHeaderColors() && _helper->shouldDrawToolsArea(widget);
+    // Glass windows show KWin's glass through the tools area instead of the header color.
+    const auto drawBackground = _toolsAreaManager->hasHeaderColors() && _helper->shouldDrawToolsArea(widget)
+        && !(widget && widget->window()->testAttribute(Qt::WA_TranslucentBackground));
 
     auto mw = qobject_cast<const QMainWindow *>(widget);
     if (mw && mw == mw->window()) {
@@ -4077,7 +4082,7 @@ bool Style::drawFrameLineEditPrimitive(const QStyleOption *option, QPainter *pai
         const auto &background = palette.color(QPalette::Base);
         const auto outline(hasHighlightNeutral(widget, option, mouseOver, hasFocus) ? _helper->neutralText(palette).lighter(mouseOver || hasFocus ? 150 : 100)
                                                                                     : _helper->frameOutlineColor(palette, mouseOver, hasFocus, opacity, mode));
-        _helper->renderFrame(painter, rect, background, outline);
+        _helper->renderFrame(painter, rect, background, outline, true);
     }
 
     return true;
@@ -4715,7 +4720,10 @@ bool Style::drawPanelMenuPrimitive(const QStyleOption *option, QPainter *painter
             painter->setCompositionMode(QPainter::CompositionMode_Source);
         }
         background.setAlphaF(StyleConfigData::menuOpacity() / 100.0);
-        outline = _helper->alphaColor(palette.color(QPalette::WindowText), 0.25);
+        // KWin's glass already draws the menu's rim.
+        if (hasAlpha) {
+            outline = QColor();
+        }
     }
 
     _helper->renderMenuFrame(painter, option->rect, background, outline, hasAlpha, seamlessEdges);
@@ -8506,6 +8514,37 @@ QColor Style::scrollBarArrowColor(const QStyleOptionSlider *option, const SubCon
     }
 
     return color;
+}
+
+//____________________________________________________________________________________
+void Style::polishGlassWindow(QWidget *widget)
+{
+    if (!widget->isWindow() || widget->isVisible() || widget->testAttribute(Qt::WA_TranslucentBackground) || !_helper->compositingActive()) {
+        return;
+    }
+    // Qt creates the native window before polishing it, and a native window
+    // keeps the color format it was created with. Release the hidden native
+    // window so that showing it creates one with an alpha channel.
+    if (QWindow *window = widget->windowHandle(); window && window->handle()) {
+        window->destroy();
+    }
+    setTranslucentBackground(widget);
+    _blurHelper->registerWidget(widget);
+}
+
+//____________________________________________________________________________________
+void Style::polish(QPalette &palette)
+{
+    // Window and view backgrounds let KWin's glass show through; controls keep a faint frost.
+    for (const auto group : {QPalette::Active, QPalette::Inactive, QPalette::Disabled}) {
+        for (const auto role : {QPalette::Window, QPalette::Base}) {
+            QColor color = palette.color(group, role);
+            color.setAlpha(0);
+            palette.setColor(group, role, color);
+        }
+        palette.setColor(group, QPalette::AlternateBase, _helper->alphaColor(Qt::white, 0.04));
+        palette.setColor(group, QPalette::Button, _helper->alphaColor(Qt::white, 0.08));
+    }
 }
 
 //____________________________________________________________________________________

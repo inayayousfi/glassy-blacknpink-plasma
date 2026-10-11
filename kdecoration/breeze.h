@@ -28,6 +28,9 @@ namespace Metrics
 // which is always 2 on wayland, but can be something else on X11
 static constexpr qreal Frame_FrameRadius = 2.5;
 
+//* window corner radius, in logical pixels, matching the KWin glass behind the window
+static constexpr qreal Window_CornerRadius = 18;
+
 //* titlebar metrics, in units of small spacing
 static constexpr int TitleBar_TopMargin = 2;
 static constexpr int TitleBar_BottomMargin = 2;

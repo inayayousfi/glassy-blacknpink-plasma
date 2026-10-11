@@ -243,7 +243,6 @@ bool Decoration::init()
     connect(window(), &KDecoration3::DecoratedWindow::adjacentScreenEdgesChanged, this, &Decoration::updateTitleBar);
     connect(window(), &KDecoration3::DecoratedWindow::widthChanged, this, &Decoration::updateTitleBar);
     connect(window(), &KDecoration3::DecoratedWindow::maximizedChanged, this, &Decoration::updateTitleBar);
-    connect(window(), &KDecoration3::DecoratedWindow::maximizedChanged, this, &Decoration::setOpaque);
 
     connect(window(), &KDecoration3::DecoratedWindow::widthChanged, this, &Decoration::updateButtonsGeometry);
     connect(window(), &KDecoration3::DecoratedWindow::maximizedChanged, this, &Decoration::updateButtonsGeometry);
@@ -268,6 +267,9 @@ void Decoration::updateTitleBar()
     const qreal x = maximized ? 0 : s->smallSpacing() * Metrics::TitleBar_SideMargin;
     const qreal y = (maximized || isTopEdge()) ? 0 : s->smallSpacing() * Metrics::TitleBar_TopMargin;
     setTitleBar(QRectF(x, y, width, height));
+    // The title bar paints no background; KWin's glass shows behind it. The
+    // window content requests its own glass.
+    setBlurRegion(QRegion(QRectF(0, 0, size().width(), borderTop()).toAlignedRect()));
 }
 
 //________________________________________________________________
@@ -456,7 +458,8 @@ void Decoration::recalculateBorders()
     }
     setBorderRadius(KDecoration3::BorderRadius(topLeftRightRadius, topLeftRightRadius, bottomRightRadius, bottomLeftRadius));
 
-    if (isMaximized() || !outlinesEnabled()) {
+    // With compositing, KWin's glass already draws the window's rim.
+    if (isMaximized() || !outlinesEnabled() || settings()->isAlphaChannelSupported()) {
         setBorderOutline(KDecoration3::BorderOutline());
     } else {
         const auto color = KColorUtils::mix(window()->color(window()->isActive() ? ColorGroup::Active : ColorGroup::Inactive, ColorRole::Frame),
@@ -575,7 +578,9 @@ void Decoration::paint(QPainter *painter, const QRectF &repaintRegion)
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing);
         painter->setPen(Qt::NoPen);
-        painter->setBrush(window()->color(window()->isActive() ? ColorGroup::Active : ColorGroup::Inactive, ColorRole::Frame));
+        // With compositing, KWin's glass is the frame background.
+        painter->setBrush(s->isAlphaChannelSupported() ? QColor(Qt::transparent)
+                                                       : window()->color(window()->isActive() ? ColorGroup::Active : ColorGroup::Inactive, ColorRole::Frame));
 
         // clip away the top part
         if (!hideTitleBar()) {
@@ -640,7 +645,9 @@ void Decoration::paintTitleBar(QPainter *painter, const QRectF &repaintRegion)
         painter->setBrush(titleBarColor());
     }
 
-    if (isMaximized() || !settings()->isAlphaChannelSupported()) {
+    if (settings()->isAlphaChannelSupported()) {
+        // KWin's glass is the title bar background.
+    } else if (isMaximized()) {
         painter->setBrush(backBrush);
         painter->drawRect(rect);
 
@@ -854,7 +861,7 @@ void Decoration::setScaledCornerRadius()
     // On X11, the smallSpacing value is used for scaling.
     // On Wayland, this value has constant factor of 2.
     // Removing it will break radius scaling on X11.
-    m_scaledCornerRadius = KDecoration3::snapToPixelGrid(Metrics::Frame_FrameRadius * settings()->smallSpacing(), window()->nextScale());
+    m_scaledCornerRadius = KDecoration3::snapToPixelGrid(Metrics::Window_CornerRadius, window()->nextScale());
 }
 
 void Decoration::updateScale()
