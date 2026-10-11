@@ -11,8 +11,8 @@ mkdir "$data_dir"
 
 # A small source tree stands in for the clone; the build and pacman are simulated.
 GLASSY_BLACKNPINK_ROOT="$test_root/source"
-mkdir -p "$GLASSY_BLACKNPINK_ROOT/breeze" "$GLASSY_BLACKNPINK_ROOT/test"
-printf 'project(breeze)\n' >"$GLASSY_BLACKNPINK_ROOT/breeze/CMakeLists.txt"
+mkdir -p "$GLASSY_BLACKNPINK_ROOT/test"
+printf 'project(breeze)\n' >"$GLASSY_BLACKNPINK_ROOT/CMakeLists.txt"
 printf 'one\n' >"$GLASSY_BLACKNPINK_ROOT/theme-file"
 kwin_version='kwin 6.7.4-1'
 
@@ -93,12 +93,12 @@ ln -sfn theme-file "$GLASSY_BLACKNPINK_ROOT/link"
 glassy_blacknpink_install "$data_dir" >/dev/null
 grep -q '^build:' "$log" || fail "A changed link did not rebuild the package"
 
-# Without the Breeze fork there is nothing to build.
-mv "$GLASSY_BLACKNPINK_ROOT/breeze" "$test_root/breeze"
+# Without the Breeze sources there is nothing to build.
+mv "$GLASSY_BLACKNPINK_ROOT/CMakeLists.txt" "$test_root/CMakeLists.txt"
 : >"$log"
-if glassy_blacknpink_install "$data_dir" 2>/dev/null; then fail "The install accepted a missing Breeze fork"; fi
-grep -q '^build:' "$log" && fail "The install built without the Breeze fork"
-mv "$test_root/breeze" "$GLASSY_BLACKNPINK_ROOT/breeze"
+if glassy_blacknpink_install "$data_dir" 2>/dev/null; then fail "The install accepted missing Breeze sources"; fi
+grep -q '^build:' "$log" && fail "The install built without the Breeze sources"
+mv "$test_root/CMakeLists.txt" "$GLASSY_BLACKNPINK_ROOT/CMakeLists.txt"
 
 effect_id=glassy_blacknpink_glass_fixture
 printf '%s\n' "$effect_id" >"$data_dir/effect-id"

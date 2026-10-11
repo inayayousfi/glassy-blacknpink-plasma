@@ -23,8 +23,8 @@ glassy_blacknpink_fingerprint() {
 
 glassy_blacknpink_install() {
     local data_dir="${1:-$GLASSY_BLACKNPINK_DATA}"
-    [[ -f "$GLASSY_BLACKNPINK_ROOT/breeze/CMakeLists.txt" ]] || {
-        printf 'The Breeze fork is missing; run: git submodule update --init\n' >&2
+    [[ -f "$GLASSY_BLACKNPINK_ROOT/CMakeLists.txt" ]] || {
+        printf 'The Breeze sources are missing from %s\n' "$GLASSY_BLACKNPINK_ROOT" >&2
         return 1
     }
     local fingerprint installed="" previous_effect=""

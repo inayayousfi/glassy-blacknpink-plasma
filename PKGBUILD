@@ -7,7 +7,7 @@ pkgrel=1
 pkgdesc='Glassy Black & Pink global theme for KDE Plasma, with a glass KWin effect and a widget style built from Breeze'
 arch=('x86_64')
 options=('!debug')
-url='https://github.com/inayayousfi/glassy-blacknpink'
+url='https://github.com/inayayousfi/glassy-blacknpink-plasma'
 license=('GPL-2.0-or-later' 'GPL-3.0-or-later' 'LGPL-2.1-or-later' 'MIT')
 depends=('breeze' 'frameworkintegration' 'kcmutils' 'kcolorscheme' 'kconfig' 'kcoreaddons'
          'kdecoration' 'kguiaddons' 'ki18n' 'kiconthemes' 'kirigami' 'kwidgetsaddons'
@@ -24,7 +24,7 @@ build() {
         printf 'Build Glassy Black & Pink with install.sh\n' >&2
         return 1
     }
-    cmake -S "$startdir/breeze" -B "$srcdir/breeze" -G Ninja \
+    cmake -S "$startdir" -B "$srcdir/breeze" -G Ninja \
         -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
         -DBUILD_QT5=OFF -DBUILD_TESTING=OFF
     cmake --build "$srcdir/breeze" --parallel 4

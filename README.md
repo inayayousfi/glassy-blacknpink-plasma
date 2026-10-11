@@ -4,7 +4,7 @@ Glassy Black & Pink is a global theme for KDE Plasma 6.7 through 6.x on Arch-bas
 
 The theme contains:
 
-- a widget style and window decoration built from a [fork of KDE Breeze](https://github.com/inayayousfi/glassy-blacknpink-breeze), kept as a Git submodule in `breeze/`;
+- a widget style and window decoration built from KDE Breeze, whose modified sources sit at the root of this repository;
 
 - a KWin glass effect in `glass/` that gives whole windows, menus and panels a rounded glass surface;
 
@@ -17,14 +17,26 @@ Files under `usr/` and `etc/` keep the path they are installed to.
 ## Install
 
 ```sh
-git clone --recurse-submodules https://github.com/inayayousfi/glassy-blacknpink.git
-cd glassy-blacknpink
+git clone https://github.com/inayayousfi/glassy-blacknpink-plasma.git
+cd glassy-blacknpink-plasma
 ./install.sh
 ```
 
 `install.sh` builds the package with `makepkg`, installs it through `pkexec`, turns the glass effect and panel script on for your user, and loads the glass into the running KWin. Then choose Glassy Black & Pink in System Settings under Colors & Themes, Global Theme. Set `GLASSY_BLACKNPINK_ELEVATE` to use another command than `pkexec` for the installation.
 
 The widget style, decoration and glass are compiled against KWin, KDecoration and Qt. At every login, the package's `glassy-blacknpink-rebuild` service runs `install.sh` from the clone the package was built from, and rebuilds the package when those libraries or the theme's sources changed. Keep the clone where you installed it from, or run `install.sh` again from its new place.
+
+## Breeze
+
+The root holds KDE Breeze's sources, from [invent.kde.org/plasma/breeze](https://invent.kde.org/plasma/breeze), with the theme's changes to its widget style and window decoration; `README.breeze.md` is Breeze's own README. The theme's own files sit beside them: `glass/`, `cursor-art/`, `usr/`, `etc/`, `test/`, `install.sh` and `PKGBUILD`.
+
+The `breeze-upstream` branch holds Breeze exactly as KDE published it, one commit per version taken, without KDE's history. To move to a newer Breeze:
+
+1. Check out `breeze-upstream` and replace its files with the new KDE Breeze sources, for example from a release archive.
+
+2. Commit them as one commit that names the KDE version or commit.
+
+3. Check out `main` and merge `breeze-upstream`. Git applies the theme's changes to the new sources; resolve any conflicts, keeping the theme's `README.md`.
 
 ## Tests
 
