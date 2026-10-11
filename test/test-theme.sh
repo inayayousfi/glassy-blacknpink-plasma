@@ -77,7 +77,7 @@ for (const name of fs.readdirSync(root)) {
 ' "$cursor_theme_root/cursors" \
     || fail "Glassy Black & Pink cursors artwork and cursor slots must both be 40 px"
 cursor_build_dir="$test_root/cursor-build"
-python3 "$repo_root/cursors/build.py" --output-dir "$cursor_build_dir" \
+python3 "$repo_root/cursor-art/build.py" --output-dir "$cursor_build_dir" \
     || fail "Glassy Black & Pink cursors SVG artwork did not build"
 for cursor in default crosshair help no-drop up-arrow person location size_hor size_ver size_fdiag size_bdiag progress wait; do
     cmp -s "$cursor_theme_root/cursors/$cursor" "$cursor_build_dir/$cursor" \
