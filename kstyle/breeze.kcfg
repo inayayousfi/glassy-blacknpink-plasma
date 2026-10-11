@@ -179,7 +179,7 @@
 
     <!-- transparency -->
     <entry name="MenuOpacity" type="Int">
-        <default>0</default>
+        <default>100</default>
     </entry>
 
   </group>

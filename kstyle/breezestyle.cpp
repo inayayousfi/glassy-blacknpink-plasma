@@ -4730,7 +4730,9 @@ bool Style::drawPanelMenuPrimitive(const QStyleOption *option, QPainter *painter
     const auto &palette(option->palette);
     const bool hasAlpha(_helper->hasAlphaChannel(widget));
     const auto seamlessEdges = _helper->menuSeamlessEdges(widget);
-    auto background(_helper->frameBackgroundColor(palette));
+    // The color scheme's window color is transparent for the glass; menus
+    // stay readable over any background on black.
+    QColor background(Qt::black);
     auto outline(_helper->frameOutlineColor(palette));
 
     painter->save();
