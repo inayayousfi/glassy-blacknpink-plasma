@@ -26,7 +26,7 @@ cd glassy-blacknpink-plasma
 
 `install.sh` builds the package with `makepkg`, installs it through `pkexec`, turns the glass effect and panel script on for your user, and loads the glass into the running KWin. Then choose Glassy Black & Pink in System Settings under Colors & Themes, Global Theme. Set `GLASSY_BLACKNPINK_ELEVATE` to use another command than `pkexec` for the installation.
 
-The widget style, decoration and glass are compiled against KWin, KDecoration and Qt. At every login, the package's `glassy-blacknpink-rebuild` service runs `install.sh` from the clone the package was built from, and rebuilds the package when those libraries or the theme's sources changed. If that rebuild fails, for example because a new KWin changed the interface the glass is built against, KDE's standard blur takes over and a desktop notification says so. Keep the clone where you installed it from, or run `install.sh` again from its new place.
+The widget style, decoration and glass are compiled against KWin, KDecoration and Qt. At every login, the package's `glassy-blacknpink-rebuild` service runs `install.sh` from the clone the package was built from, and rebuilds the package when those libraries or the theme's sources changed. If that rebuild fails, for example because a new KWin changed the interface the glass is built against, KDE's standard blur takes over and a desktop notification says why: the failed step, the first compiler errors, or the reason KWin gave for refusing the glass. It is marked critical, so it shows even during Do Not Disturb. Keep the clone where you installed it from, or run `install.sh` again from its new place.
 
 ## Breeze
 

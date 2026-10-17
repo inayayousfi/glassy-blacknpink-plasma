@@ -24,8 +24,15 @@ pacman() {
     [[ "$*" == '-Q kwin kdecoration qt6-base' ]] || return 1
     printf '%s\nkdecoration 6.7.4-1\nqt6-base 6.11.0-1\n' "$kwin_version"
 }
+build_fails=false
 makepkg() {
     printf 'build:%s:%s\n' "$PWD" "$*" >>"$log"
+    if "$build_fails"; then
+        printf '[9/10] Building CXX object CMakeFiles/glass.dir/glass.cpp.o\n'
+        printf '%s/glass/glass.cpp:509:40: error: snapToPixelGrid was not declared in this scope\n' "$GLASSY_BLACKNPINK_ROOT" >&2
+        printf '==> ERROR: A failure occurred in build().\n' >&2
+        return 1
+    fi
     [[ -n "$GLASSY_BLACKNPINK_FINGERPRINT" && -d "$BUILDDIR" && "$PKGDEST" == "$BUILDDIR" ]]
     printf '%s\n' "$GLASSY_BLACKNPINK_FINGERPRINT" >"$PKGDEST/fingerprint"
     touch "$PKGDEST/glassy-blacknpink-2.0.0-1-x86_64.pkg.tar.zst"
@@ -100,6 +107,19 @@ if glassy_blacknpink_install "$data_dir" 2>/dev/null; then fail "The install acc
 grep -q '^build:' "$log" && fail "The install built without the Breeze sources"
 mv "$test_root/CMakeLists.txt" "$GLASSY_BLACKNPINK_ROOT/CMakeLists.txt"
 
+# A failed build reports the compiler error it stopped on, without the clone path.
+report="$test_root/report"
+: >"$report"
+printf 'three\n' >"$GLASSY_BLACKNPINK_ROOT/theme-file"
+build_fails=true
+if GLASSY_BLACKNPINK_REPORT="$report" TMPDIR="$test_root" glassy_blacknpink_install "$data_dir" >/dev/null 2>&1; then
+    fail "The install accepted a failed build"
+fi
+build_fails=false
+grep -q '^Glassy Black & Pink build failed' "$report" || fail "The report does not say the build failed"
+grep -Fxq 'glass/glass.cpp:509:40: error: snapToPixelGrid was not declared in this scope' "$report" \
+    || fail "The report does not name the compiler error"
+
 effect_id=glassy_blacknpink_glass_fixture
 printf '%s\n' "$effect_id" >"$data_dir/effect-id"
 session_active=true
@@ -119,6 +139,14 @@ qdbus6() {
     esac
 }
 systemctl() { printf 'systemctl:%s\n' "$*" >>"$log"; }
+journalctl() {
+    case "$*" in
+        *QT_CATEGORY=kwin_core*)
+            printf 'Effect "%s" was built for a different version of KWin and needs to be rebuilt\n' "$effect_id"
+            printf 'Effect "other_effect" was built for a different version of KWin and needs to be rebuilt\n'
+            ;;
+    esac
+}
 
 # Loading replaces KDE's blur and older glass builds, and drops their switches.
 : >"$log"
@@ -148,7 +176,14 @@ for failure in load shader; do
     load_succeeds=true
     shaders_valid=true
     if [[ "$failure" == load ]]; then load_succeeds=false; else shaders_valid=false; fi
-    if glassy_blacknpink_activate "$data_dir" >/dev/null 2>&1; then fail "Activation accepted a failed $failure"; fi
+    : >"$report"
+    if GLASSY_BLACKNPINK_REPORT="$report" glassy_blacknpink_activate "$data_dir" >/dev/null 2>&1; then
+        fail "Activation accepted a failed $failure"
+    fi
+    grep -Fxq "KWin could not initialize the glass: $effect_id" "$report" || fail "The report does not name the failed glass"
+    grep -Fq "Effect \"$effect_id\" was built for a different version of KWin" "$report" \
+        || fail "The report does not give KWin's reason"
+    grep -q 'other_effect' "$report" && fail "The report included another effect's KWin message"
     grep -q 'Effects.loadEffect blur' "$log"
     grep -q 'unloadEffect other_effect' "$log" && fail "The fallback unloaded an unrelated effect"
     grep -q 'blurEnabled true' "$log"
