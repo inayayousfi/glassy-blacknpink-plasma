@@ -1,12 +1,23 @@
 #!/usr/bin/env bash
 
 # Runs at login: rebuilds Glassy Black & Pink from the clone it was installed
-# from when KDE's libraries changed, then reloads its glass.
+# from when KDE's libraries changed, then reloads its glass. A failure leaves
+# KDE's standard blur in place, so it is shown as a desktop notification.
 set -euo pipefail
+
+notify_failure() {
+    notify-send --app-name='Glassy Black & Pink' --icon=dialog-warning \
+        'Glassy Black & Pink glass is off' \
+        "$1 Details: journalctl --user -u glassy-blacknpink-rebuild" || true
+}
 
 source_dir="$(</usr/share/glassy-blacknpink/source)"
 [ -f "$source_dir/install.sh" ] || {
     printf 'Glassy Black & Pink source is missing at %s; run install.sh from your clone again\n' "$source_dir" >&2
+    notify_failure "The source clone is missing at $source_dir; run install.sh from your clone again."
     exit 1
 }
-exec /usr/bin/bash "$source_dir/install.sh"
+/usr/bin/bash "$source_dir/install.sh" || {
+    notify_failure 'The rebuild after a KDE update failed, so KDE uses its standard blur.'
+    exit 1
+}
