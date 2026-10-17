@@ -89,6 +89,22 @@ static std::unique_ptr<GLShader> loadShader(const QString &name)
     return shader;
 }
 
+// Rounds both corners to whole device pixels, as KWin 6.7's snapToPixelGrid
+// did; KWin 6.8 removed it.
+static QRect roundedDeviceRect(const QRectF &rect)
+{
+    const QPoint topLeft(std::round(rect.x()), std::round(rect.y()));
+    const QPoint bottomRight(std::round(rect.right()), std::round(rect.bottom()));
+    return QRect(topLeft.x(), topLeft.y(), bottomRight.x() - topLeft.x(), bottomRight.y() - topLeft.y());
+}
+
+// KWin 6.8 made drawWindow report whether the window was drawn.
+#if GLASS_KWIN_DRAW_RETURNS_BOOL
+using DrawWindowResult = bool;
+#else
+using DrawWindowResult = void;
+#endif
+
 class GlassEffect : public Effect
 {
     Q_OBJECT
@@ -105,7 +121,7 @@ public:
     void prePaintScreen(ScreenPrePaintData &data) override;
     void postPaintScreen() override;
     void prePaintWindow(RenderView *view, EffectWindow *w, WindowPrePaintData &data) override;
-    void drawWindow(const RenderTarget &renderTarget, const RenderViewport &viewport, EffectWindow *w, int mask, const Region &deviceRegion, WindowPaintData &data) override;
+    DrawWindowResult drawWindow(const RenderTarget &renderTarget, const RenderViewport &viewport, EffectWindow *w, int mask, const Region &deviceRegion, WindowPaintData &data) override;
 
     bool provides(Feature feature) override
     {
@@ -471,12 +487,12 @@ bool GlassEffect::shouldDraw(const EffectWindow *w, int mask, const WindowPaintD
     return forced || !(scaled || translated || (mask & PAINT_WINDOW_TRANSFORMED));
 }
 
-void GlassEffect::drawWindow(const RenderTarget &renderTarget, const RenderViewport &viewport, EffectWindow *w, int mask, const Region &deviceRegion, WindowPaintData &data)
+DrawWindowResult GlassEffect::drawWindow(const RenderTarget &renderTarget, const RenderViewport &viewport, EffectWindow *w, int mask, const Region &deviceRegion, WindowPaintData &data)
 {
     if (auto it = m_windows.find(w); it != m_windows.end() && shouldDraw(w, mask, data)) {
         draw(renderTarget, viewport, w, it->second, deviceRegion, data);
     }
-    effects->drawWindow(renderTarget, viewport, w, mask, deviceRegion, data);
+    return effects->drawWindow(renderTarget, viewport, w, mask, deviceRegion, data);
 }
 
 void GlassEffect::draw(const RenderTarget &renderTarget, const RenderViewport &viewport, EffectWindow *w, Glass &glass, const Region &deviceRegion, const WindowPaintData &data)
@@ -506,10 +522,10 @@ void GlassEffect::draw(const RenderTarget &renderTarget, const RenderViewport &v
     }
 
     const QRect backgroundRect = glassShape.boundingRect();
-    const QRect scaledBackgroundRect = snapToPixelGrid(QRectF(backgroundRect.x() * viewport.scale(),
-                                                              backgroundRect.y() * viewport.scale(),
-                                                              backgroundRect.width() * viewport.scale(),
-                                                              backgroundRect.height() * viewport.scale()));
+    const QRect scaledBackgroundRect = roundedDeviceRect(QRectF(backgroundRect.x() * viewport.scale(),
+                                                                backgroundRect.y() * viewport.scale(),
+                                                                backgroundRect.width() * viewport.scale(),
+                                                                backgroundRect.height() * viewport.scale()));
     const QRect deviceBackgroundRect = viewport.mapToDeviceCoordinates(Rect(backgroundRect)).rounded();
 
     // Draw only the part of the glass that this repaint touches.

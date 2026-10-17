@@ -27,7 +27,8 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/qmldir" DESTINATION ${KDE_INSTALL_QML
 # path from the first library that registered it.
 add_library(glass MODULE glass.cpp)
 set_target_properties(glass PROPERTIES OUTPUT_NAME "${GLASS_EFFECT_ID}" PREFIX "")
-target_compile_definitions(glass PRIVATE GLASS_EFFECT_ID="${GLASS_EFFECT_ID}")
+target_compile_definitions(glass PRIVATE GLASS_EFFECT_ID="${GLASS_EFFECT_ID}"
+    GLASS_KWIN_DRAW_RETURNS_BOOL=$<VERSION_GREATER_EQUAL:${KWin_VERSION},6.8>)
 qt_add_resources(glass glass PREFIX "/${GLASS_EFFECT_ID}" FILES downsample.frag upsample.frag detail.frag busy.frag glass.frag)
 target_link_libraries(glass PRIVATE KWin::kwin KDecoration3::KDecoration)
 install(TARGETS glass DESTINATION ${KDE_INSTALL_PLUGINDIR}/kwin/effects/plugins)
